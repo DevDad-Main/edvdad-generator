@@ -1,0 +1,189 @@
+# {{projectName}}
+
+Generated {{framework}} backend with {{database}} and authentication features.
+
+## 🚀 Features
+
+{{#if features.jwt}}
+- ✅ JWT Authentication with refresh tokens
+{{/if}}
+{{#if features.otp}}
+- ✅ Email verification with OTP
+{{/if}}
+{{#if features.passwordReset}}
+- ✅ Password reset functionality
+{{/if}}
+{{#if features.redis}}
+- ✅ Redis for session management
+{{/if}}
+{{#if features.rateLimit}}
+- ✅ Rate limiting
+{{/if}}
+{{#if features.validation}}
+- ✅ Input validation
+{{/if}}
+{{#if features.helmet}}
+- ✅ Security headers (Helmet)
+{{/if}}
+{{#if features.cors}}
+- ✅ CORS configuration
+{{/if}}
+{{#if features.logging}}
+- ✅ Comprehensive logging
+{{/if}}
+{{#if features.docs}}
+- ✅ API documentation (Swagger)
+{{/if}}
+
+## 📁 Project Structure
+
+```
+{{projectName}}/
+├── src/
+│   ├── controllers/          # Route controllers
+│   ├── routes/              # API routes
+│   ├── models/              # {{#if (eq database "mongodb")}}Mongoose{{else}}Prisma{{/if}} models
+│   ├── middleware/          # Custom middleware
+│   ├── services/            # Business logic services
+│   ├── utils/               # Utility functions
+│   ├── app.js               # Express app configuration
+│   └── server.js            # Server entry point
+├── {{#if (eq database "mongodb")}}.env.example{{else}}prisma/
+│   └── schema.prisma        # Prisma database schema{{/if}}
+├── package.json
+└── README.md
+```
+
+## 🛠 Installation & Setup
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Environment configuration**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+{{#unless (eq database "mongodb")}}
+3. **Setup database**
+   ```bash
+   {{#if (eq database "sqlite")}}
+   # SQLite is ready to use
+   {{else}}
+   # Create database and run migrations
+   npm run db:push
+   {{/if}}
+   
+   {{#if (eq database "postgresql")}}
+   # Make sure PostgreSQL is running and the database exists
+   {{/if}}
+   {{#if (eq database "mysql")}}
+   # Make sure MySQL is running and the database exists
+   {{/if}}
+   ```
+{{/unless}}
+
+{{#if (eq database "mongodb")}}
+3. **Start MongoDB**
+   ```bash
+   # Make sure MongoDB is running on your system
+   mongod
+   ```
+{{/if}}
+
+4. **Start the server**
+   ```bash
+   # Development
+   npm run dev
+   
+   # Production
+   npm start
+   ```
+
+## 📡 API Endpoints
+
+{{#if features.jwt}}
+### Authentication
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `POST /api/auth/logout` - User logout
+- `POST /api/auth/refresh-token` - Refresh access token
+{{#if features.otp}}
+- `POST /api/auth/verify-registration` - Verify email with OTP
+{{/if}}
+{{#if features.passwordReset}}
+- `POST /api/auth/forgot-password` - Request password reset
+- `POST /api/auth/reset-password` - Reset password with token
+{{/if}}
+{{/if}}
+
+### General
+- `GET /health` - Health check endpoint
+
+{{#if features.docs}}
+### API Documentation
+Visit `http://localhost:3000/api-docs` for interactive API documentation.
+{{/if}}
+
+## 🔧 Environment Variables
+
+Key environment variables to configure in `.env`:
+
+- `PORT` - Server port (default: 3000)
+- `NODE_ENV` - Environment (development/production)
+- `{{#if (eq database "mongodb")}}MONGO_URI{{else}}DATABASE_URL{{/if}}` - Database connection string
+{{#if features.redis}}
+- `REDIS_URL` - Redis connection URL
+{{/if}}
+{{#if features.jwt}}
+- `JWT_SECRET` - JWT secret key
+- `JWT_REFRESH_SECRET` - JWT refresh token secret
+{{/if}}
+{{#if features.cors}}
+- `ALLOWED_ORIGINS` - Comma-separated list of allowed origins
+{{/if}}
+
+## 🔒 Security Features
+
+- Password hashing with bcrypt
+- {{#if features.jwt}}JWT with refresh token rotation{{/if}}
+- {{#if features.helmet}}Security headers with Helmet{{/if}}
+- {{#if features.cors}}CORS protection{{/if}}
+- {{#if features.rateLimit}}Rate limiting{{/if}}
+- {{#if features.validation}}Input validation and sanitization{{/if}}
+
+## 🧪 Development
+
+The server includes hot-reloading with nodemon during development.
+
+{{#unless (eq database "mongodb")}}
+### Database Commands
+```bash
+npm run db:generate    # Generate Prisma client
+npm run db:push        # Push schema to database
+npm run db:migrate     # Run database migrations
+npm run db:studio      # Open Prisma Studio
+```
+{{/unless}}
+
+## 📝 Logging
+
+{{#if features.logging}}
+The application uses Winston for logging:
+- Console output for development
+- File logging for errors and combined logs
+- Configurable log levels
+
+Log files are stored in the `logs/` directory.
+{{/if}}
+
+## 🤝 Contributing
+
+This is a generated backend. Feel free to modify and extend it according to your needs.
+
+## 📄 License
+
+ISC

@@ -1,0 +1,92 @@
+import jwt from "jsonwebtoken";
+{{#if (eq database "mongodb")}}
+import { User } from "../models/User.model.js";
+{{else}}
+import prisma from "../utils/prisma.js";
+{{/if}}
+import { logger, sendError } from "devdad-express-utils";
+
+// Authenticate user middleware
+export const authenticate = async (req, res, next) => {
+  try {
+    const { accessToken } = req.cookies;
+
+    if (!accessToken) {
+      return sendError(res, "Access token required", 401);
+    }
+
+    const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+
+    {{#if (eq database "mongodb")}}
+    const user = await User.findById(decoded.userId);
+    {{else}}
+    const user = await prisma.user.findUnique({ 
+      where: { id: decoded.userId } 
+    });
+    {{/if}}
+
+    if (!user) {
+      return sendError(res, "User not found", 401);
+    }
+
+    {{#if features.otp}}
+    if (!user.isVerified) {
+      return sendError(res, "Email not verified", 401);
+    }
+    {{/if}}
+
+    req.user = {
+      id: user.id || user._id,
+      email: user.email,
+      fullName: user.fullName,
+    };
+
+    next();
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Authentication error:", error);
+    {{/if}}
+    
+    if (error.name === "JsonWebTokenError") {
+      return sendError(res, "Invalid token", 401);
+    }
+    
+    if (error.name === "TokenExpiredError") {
+      return sendError(res, "Token expired", 401);
+    }
+
+    return sendError(res, "Authentication failed", 401);
+  }
+};
+
+// Optional authentication - doesn't fail if no token
+export const optionalAuth = async (req, res, next) => {
+  try {
+    const { accessToken } = req.cookies;
+
+    if (accessToken) {
+      const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+
+      {{#if (eq database "mongodb")}}
+      const user = await User.findById(decoded.userId);
+      {{else}}
+      const user = await prisma.user.findUnique({ 
+        where: { id: decoded.userId } 
+      });
+      {{/if}}
+
+      if (user && {{#unless features.otp}}true{{/unless}}{{#if features.otp}}user.isVerified{{/if}}) {
+        req.user = {
+          id: user.id || user._id,
+          email: user.email,
+          fullName: user.fullName,
+        };
+      }
+    }
+
+    next();
+  } catch (error) {
+    // Don't fail the request, just continue without authentication
+    next();
+  }
+};

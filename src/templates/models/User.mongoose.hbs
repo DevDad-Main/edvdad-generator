@@ -1,0 +1,97 @@
+import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+
+/**
+ * User Schema for MongoDB with Mongoose
+ */
+const userSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: 8,
+    },
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    lastLogin: {
+      type: Date,
+      default: Date.now,
+    },
+    {{#if features.jwt}}
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    {{#if features.otp}}
+    verificationToken: String,
+    verificationTokenExpiresAt: Date,
+    {{/if}}
+    {{#if features.passwordReset}}
+    resetPasswordToken: String,
+    resetPasswordExpiresAt: Date,
+    {{/if}}
+    {{/if}}
+  },
+  { 
+    timestamps: true,
+    toJSON: {
+      transform: function(doc, ret) {
+        delete ret.password;
+        {{#if features.otp}}
+        delete ret.verificationToken;
+        {{/if}}
+        {{#if features.passwordReset}}
+        delete ret.resetPasswordToken;
+        {{/if}}
+        return ret;
+      }
+    }
+  }
+);
+
+// Index for better search performance
+userSchema.index({
+  fullName: "text",
+  email: "text",
+});
+
+// Password comparison method
+userSchema.methods.comparePassword = async function (passwordToCompare) {
+  try {
+    return await bcrypt.compare(passwordToCompare, this.password);
+  } catch (error) {
+    throw error;
+  }
+};
+
+{{#if features.passwordReset}}
+// Password reset token method
+userSchema.methods.createPasswordResetToken = function() {
+  const crypto = require('crypto');
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  
+  this.resetPasswordExpiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+  
+  return resetToken;
+};
+{{/if}}
+
+/**
+ * User Model - Represents user accounts with authentication features
+ */
+export const User = mongoose.model("User", userSchema);

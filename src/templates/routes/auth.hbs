@@ -1,0 +1,90 @@
+import { Router } from "express";
+import {
+  register,
+  login,
+  logout,
+  refreshToken{{#if features.otp}},
+  verifyRegistration{{/if}}{{#if features.passwordReset}},
+  requestPasswordReset,
+  resetPassword{{/if}}
+} from "../controllers/auth.controller.js";
+{{#if features.validation}}
+import {
+  validateRegister,
+  validateLogin,
+  handleValidationErrors{{#if features.otp}},
+  verifyOTPVAlidation{{/if}}{{#if features.passwordReset}},
+  requestPasswordResetValidation,
+  resetPasswordValidation{{/if}}
+} from "../utils/validation.js";
+{{/if}}
+
+const router = Router();
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       required:
+ *         - email
+ *         - password
+ *         - fullName
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: The auto-generated id of the user
+ *         email:
+ *           type: string
+ *           description: The user's email
+ *         fullName:
+ *           type: string
+ *           description: The user's full name
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *           description: The date the user was created
+ */
+
+// Register new user
+router.post("/register",
+  {{#if features.validation}}validateRegister, handleValidationErrors,{{/if}}
+  register
+);
+
+{{#if features.otp}}
+// Verify email with OTP
+router.post("/verify-registration",
+  {{#if features.validation}}verifyOTPVAlidation, handleValidationErrors,{{/if}}
+  verifyRegistration
+);
+{{/if}}
+
+// Login user
+router.post("/login",
+  {{#if features.validation}}validateLogin, handleValidationErrors,{{/if}}
+  login
+);
+
+// Logout user
+router.post("/logout", logout);
+
+// Refresh access token
+router.post("/refresh-token", refreshToken);
+
+{{#if features.passwordReset}}
+// Request password reset
+router.post("/request-password-reset",
+  {{#if features.validation}}requestPasswordResetValidation, handleValidationErrors,{{/if}}
+  requestPasswordReset
+);
+
+// Reset password with token
+router.post("/reset-password",
+  {{#if features.validation}}resetPasswordValidation, handleValidationErrors,{{/if}}
+  resetPassword
+);
+{{/if}}
+
+export { router as authRouter };

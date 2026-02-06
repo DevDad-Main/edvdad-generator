@@ -1,0 +1,472 @@
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+{{#if (eq database "mongodb")}}
+import { User, RefreshToken } from "../models/User.model.js";
+{{else}}
+import prisma from "../utils/prisma.js";
+{{/if}}
+{{#if features.otp}}
+import { sendVerificationEmail, sendOTPEmail } from "../services/email.service.js";
+{{/if}}
+{{#if features.passwordReset}}
+import { sendPasswordResetEmail } from "../services/email.service.js";
+{{/if}}
+{{#if features.redis}}
+import redisClient from "../utils/redis.js";
+{{/if}}
+import { logger, sendError, sendSuccess } from "devdad-express-utils";
+
+// Generate JWT tokens
+const generateTokens = async (userId) => {
+  const accessToken = jwt.sign(
+    { userId },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE || "15m" }
+  );
+
+  const refreshToken = jwt.sign(
+    { userId },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: process.env.JWT_REFRESH_EXPIRE || "7d" }
+  );
+
+  {{#if (eq database "mongodb")}}
+  // Store refresh token in database
+  await RefreshToken.create({
+    token: refreshToken,
+    user: userId,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+  });
+  {{else}}
+  // Store refresh token in database
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshToken,
+      userId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    },
+  });
+  {{/if}}
+
+  return { accessToken, refreshToken };
+};
+
+// Register user
+export const register = async (req, res) => {
+  try {
+    const { email, password, fullName } = req.body;
+
+    // Check if user already exists
+    {{#if (eq database "mongodb")}}
+    const existingUser = await User.findOne({ email });
+    {{else}}
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    {{/if}}
+
+    if (existingUser) {
+      return sendError(res, "User already exists", 400);
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    {{#if (eq database "mongodb")}}
+    // Create user
+    const user = new User({
+      email,
+      password: hashedPassword,
+      fullName,
+      {{#if features.otp}}
+      verificationToken: Math.random().toString(36).substring(2, 8),
+      verificationTokenExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      {{/if}}
+    });
+
+    await user.save();
+    {{else}}
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        fullName,
+        {{#if features.otp}}
+        verificationToken: Math.random().toString(36).substring(2, 8),
+        verificationTokenExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        {{/if}}
+      },
+    });
+    {{/if}}
+
+    {{#if features.otp}}
+    // Send verification email
+    await sendVerificationEmail(user.email, user.verificationToken);
+    {{/if}}
+
+    {{#if features.logging}}
+    logger.info(`User registered: ${email}`);
+    {{/if}}
+
+    sendSuccess(res, {
+      message: {{#if features.otp}}"User registered successfully. Please check your email for verification."{{else}}"User registered successfully"{{/if}},
+      {{#unless features.otp}}
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+      },
+      {{/unless}}
+    });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Registration error:", error);
+    {{/if}}
+    sendError(res, "Registration failed", 500);
+  }
+};
+
+{{#if features.otp}}
+// Verify registration with OTP
+export const verifyRegistration = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    {{#if (eq database "mongodb")}}
+    const user = await User.findOne({
+      email,
+      verificationToken: otp,
+      verificationTokenExpiresAt: { $gt: Date.now() },
+    });
+    {{else}}
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        verificationToken: otp,
+        verificationTokenExpiresAt: { gt: new Date() },
+      },
+    });
+    {{/if}}
+
+    if (!user) {
+      return sendError(res, "Invalid or expired verification token", 400);
+    }
+
+    {{#if (eq database "mongodb")}}
+    await User.findByIdAndUpdate(user._id, {
+      isVerified: true,
+      $unset: { verificationToken: 1, verificationTokenExpiresAt: 1 },
+    });
+    {{else}}
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isVerified: true,
+        verificationToken: null,
+        verificationTokenExpiresAt: null,
+      },
+    });
+    {{/if}}
+
+    {{#if features.logging}}
+    logger.info(`User verified: ${email}`);
+    {{/if}}
+
+    sendSuccess(res, { message: "Email verified successfully" });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Verification error:", error);
+    {{/if}}
+    sendError(res, "Verification failed", 500);
+  }
+};
+{{/if}}
+
+// Login user
+export const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    {{#if (eq database "mongodb")}}
+    const user = await User.findOne({ email });
+    {{else}}
+    const user = await prisma.user.findUnique({ where: { email } });
+    {{/if}}
+
+    if (!user || !(await user.comparePassword ? await user.comparePassword(password) : await bcrypt.compare(password, user.password))) {
+      return sendError(res, "Invalid credentials", 401);
+    }
+
+    {{#if features.otp}}
+    if (!user.isVerified) {
+      return sendError(res, "Please verify your email first", 401);
+    }
+    {{/if}}
+
+    // Generate tokens
+    const { accessToken, refreshToken } = await generateTokens(user.id || user._id);
+
+    // Update last login
+    {{#if (eq database "mongodb")}}
+    await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+    {{else}}
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+    {{/if}}
+
+    // Set HTTP-only cookies
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    {{#if features.logging}}
+    logger.info(`User logged in: ${email}`);
+    {{/if}}
+
+    sendSuccess(res, {
+      message: "Login successful",
+      user: {
+        id: user.id || user._id,
+        email: user.email,
+        fullName: user.fullName,
+      },
+    });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Login error:", error);
+    {{/if}}
+    sendError(res, "Login failed", 500);
+  }
+};
+
+// Logout user
+export const logout = async (req, res) => {
+  try {
+    const { refreshToken } = req.cookies;
+
+    if (refreshToken) {
+      {{#if (eq database "mongodb")}}
+      await RefreshToken.findOneAndUpdate(
+        { token: refreshToken },
+        { isRevoked: true }
+      );
+      {{else}}
+      await prisma.refreshToken.updateMany({
+        where: { token: refreshToken },
+        data: { isRevoked: true },
+      });
+      {{/if}}
+    }
+
+    // Clear cookies
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+
+    {{#if features.logging}}
+    logger.info("User logged out");
+    {{/if}}
+
+    sendSuccess(res, { message: "Logout successful" });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Logout error:", error);
+    {{/if}}
+    sendError(res, "Logout failed", 500);
+  }
+};
+
+// Refresh access token
+export const refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.cookies;
+
+    if (!refreshToken) {
+      return sendError(res, "Refresh token not found", 401);
+    }
+
+    // Verify refresh token
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+    {{#if (eq database "mongodb")}}
+    const storedToken = await RefreshToken.findOne({
+      token: refreshToken,
+      user: decoded.userId,
+      isRevoked: false,
+      expiresAt: { $gt: Date.now() },
+    });
+    {{else}}
+    const storedToken = await prisma.refreshToken.findFirst({
+      where: {
+        token: refreshToken,
+        userId: decoded.userId,
+        isRevoked: false,
+        expiresAt: { gt: new Date() },
+      },
+    });
+    {{/if}}
+
+    if (!storedToken) {
+      return sendError(res, "Invalid refresh token", 401);
+    }
+
+    // Generate new tokens
+    const { accessToken, refreshToken: newRefreshToken } = await generateTokens(decoded.userId);
+
+    // Revoke old refresh token
+    {{#if (eq database "mongodb")}}
+    await RefreshToken.findByIdAndUpdate(storedToken._id, { isRevoked: true });
+    {{else}}
+    await prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { isRevoked: true },
+    });
+    {{/if}}
+
+    // Set new cookies
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 15 * 60 * 1000, // 15 minutes
+    });
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    sendSuccess(res, { message: "Token refreshed successfully" });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Token refresh error:", error);
+    {{/if}}
+    sendError(res, "Token refresh failed", 401);
+  }
+};
+
+{{#if features.passwordReset}}
+// Request password reset
+export const requestPasswordReset = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    {{#if (eq database "mongodb")}}
+    const user = await User.findOne({ email });
+    {{else}}
+    const user = await prisma.user.findUnique({ where: { email } });
+    {{/if}}
+
+    if (!user) {
+      // Don't reveal if user exists or not
+      return sendSuccess(res, { 
+        message: "If an account with that email exists, a password reset link has been sent" 
+      });
+    }
+
+    const resetToken = user.createPasswordResetToken ? 
+      await user.createPasswordResetToken() : 
+      Math.random().toString(36).substring(2, 8);
+
+    {{#if (eq database "mongodb")}}
+    await user.save();
+    {{else}}
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: resetToken,
+        resetPasswordExpiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      },
+    });
+    {{/if}}
+
+    await sendPasswordResetEmail(user.email, resetToken);
+
+    {{#if features.logging}}
+    logger.info(`Password reset requested for: ${email}`);
+    {{/if}}
+
+    sendSuccess(res, { 
+      message: "If an account with that email exists, a password reset link has been sent" 
+    });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Password reset request error:", error);
+    {{/if}}
+    sendError(res, "Password reset request failed", 500);
+  }
+};
+
+// Reset password
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    {{#if (eq database "mongodb")}}
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpiresAt: { $gt: Date.now() },
+    });
+    {{else}}
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: token,
+        resetPasswordExpiresAt: { gt: new Date() },
+      },
+    });
+    {{/if}}
+
+    if (!user) {
+      return sendError(res, "Invalid or expired reset token", 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    {{#if (eq database "mongodb")}}
+    await User.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      $unset: { resetPasswordToken: 1, resetPasswordExpiresAt: 1 },
+    });
+    {{else}}
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpiresAt: null,
+      },
+    });
+    {{/if}}
+
+    {{#if features.logging}}
+    logger.info(`Password reset completed for: ${user.email}`);
+    {{/if}}
+
+    sendSuccess(res, { message: "Password reset successful" });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Password reset error:", error);
+    {{/if}}
+    sendError(res, "Password reset failed", 500);
+  }
+};
+{{/if}}

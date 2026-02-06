@@ -1,0 +1,48 @@
+import mongoose from "mongoose";
+
+/**
+ * Refresh Token Schema for JWT token rotation
+ */
+const refreshTokenSchema = new mongoose.Schema(
+  {
+    token: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+    isRevoked: {
+      type: Boolean,
+      default: false,
+    },
+    deviceInfo: {
+      userAgent: String,
+      ip: String,
+    },
+  },
+  { 
+    timestamps: true 
+  }
+);
+
+// TTL index to automatically remove expired tokens
+refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// Method to revoke token
+refreshTokenSchema.methods.revoke = function() {
+  this.isRevoked = true;
+  return this.save();
+};
+
+/**
+ * RefreshToken Model - Manages JWT refresh tokens for secure authentication
+ */
+export const RefreshToken = mongoose.model("RefreshToken", refreshTokenSchema);

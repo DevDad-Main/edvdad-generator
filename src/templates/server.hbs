@@ -1,0 +1,81 @@
+import { logger, connectDB, getDBStatus } from 'devdad-express-utils';
+import app from './app.js';
+{{#unless (eq database "mongodb")}}
+import { PrismaClient } from '@prisma/client';
+{{/unless}}
+{{#if features.redis}}
+import redisClient from './utils/redis.js';
+{{/if}}
+
+const PORT = process.env.PORT || "3000";
+
+{{#unless (eq database "mongodb")}}
+export const prisma = new PrismaClient();
+{{/unless}}
+
+async function startServer() {
+  try {
+    {{#if (eq database "mongodb")}}
+    // Connect to MongoDB with automatic retry logic
+    await connectDB();
+    const dbStatus = getDBStatus();
+    logger.info('Connected to MongoDB', { dbStatus });
+    {{else}}
+    // Test Prisma connection
+    await prisma.$connect();
+    logger.info('Connected to database');
+    {{/if}}
+
+    {{#if features.redis}}
+    // Test Redis connection
+    await redisClient.ping();
+    {{#if features.logging}}
+    logger.info('Connected to Redis');
+    {{/if}}
+    {{/if}}
+
+    app.listen(PORT, () => {
+      {{#if features.logging}}
+      logger.info(`🚀 Server running on port ${PORT}`);
+      {{else}}
+      console.log(`🚀 Server running on port ${PORT}`);
+      {{/if}}
+    });
+
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error('Failed to start server:', error);
+    {{else}}
+    console.error('Failed to start server:', error);
+    {{/if}}
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  {{#if features.logging}}
+  logger.info('SIGTERM received, shutting down gracefully');
+  {{/if}}
+  
+  {{#unless (eq database "mongodb")}}
+  await prisma.$disconnect();
+  {{/unless}}
+  
+  {{#if features.redis}}
+  await redisClient.quit();
+  {{/if}}
+  
+  process.exit(0);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  {{#if features.logging}}
+  logger.error('Unhandled Rejection at:', { reason, promise });
+  {{else}}
+  console.error('Unhandled Rejection at:', reason, promise);
+  {{/if}}
+  process.exit(1);
+});
+
+startServer();

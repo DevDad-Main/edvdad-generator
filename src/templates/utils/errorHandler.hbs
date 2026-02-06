@@ -1,0 +1,41 @@
+import { sendError } from '../utils/response.js';
+{{#if features.logging}}
+import { logger } from '../utils/logger.js';
+{{/if}}
+
+export const errorHandler = (err, req, res, next) => {
+  {{#if features.logging}}
+  logger.error('Error occurred:', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+  });
+  {{/if}}
+
+  // Handle specific error types
+  if (err.name === 'ValidationError') {
+    return sendError(res, 'Validation failed', 400);
+  }
+
+  if (err.code === 11000) {
+    return sendError(res, 'Duplicate field value', 400);
+  }
+
+  if (err.name === 'JsonWebTokenError') {
+    return sendError(res, 'Invalid token', 401);
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return sendError(res, 'Token expired', 401);
+  }
+
+  // Default error
+  const statusCode = err.statusCode || 500;
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Internal server error' 
+    : err.message;
+
+  sendError(res, message, statusCode);
+};

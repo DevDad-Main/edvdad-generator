@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "{{#if (eq database 'postgresql')}}postgresql{{/if}}{{#if (eq database 'mysql')}}mysql{{/if}}{{#if (eq database 'sqlite')}}sqlite{{/if}}"
+  url      = env("DATABASE_URL")
+}
+
+{{#if features.jwt}}
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  fullName  String
+  lastLogin DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  {{#if features.otp}}
+  isVerified                   Boolean  @default(false)
+  verificationToken            String?
+  verificationTokenExpiresAt   DateTime?
+  {{/if}}
+
+  {{#if features.passwordReset}}
+  resetPasswordToken           String?
+  resetPasswordExpiresAt       DateTime?
+  {{/if}}
+
+  {{#if features.jwt}}
+  refreshTokens RefreshToken[]
+  {{/if}}
+
+  @@map("users")
+}
+
+{{#if features.jwt}}
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  userAgent String?
+  ip        String?
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("refresh_tokens")
+}
+{{/if}}
+{{/if}}
+
+{{#unless features.jwt}}
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  fullName  String
+  lastLogin DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+{{/unless}}

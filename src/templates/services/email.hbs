@@ -1,0 +1,151 @@
+{{#if (eq emailService "mailtrap")}}
+import { MailtrapClient } from "mailtrap";
+{{/if}}
+{{#if (eq emailService "resend")}}
+import { Resend } from "resend";
+{{/if}}
+{{#if (eq emailService "nodemailer")}}
+import nodemailer from "nodemailer";
+{{/if}}
+import { logger } from "devdad-express-utils";
+
+{{#if (eq emailService "mailtrap")}}
+const TOKEN = process.env.MAILTRAP_API_KEY;
+const client = new MailtrapClient({ token: TOKEN });
+
+const sender = {
+  email: "mailtrap@demomailtrap.com",
+  name: "{{projectName}}",
+};
+{{/if}}
+
+{{#if (eq emailService "resend")}}
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "noreply@yourdomain.com";
+{{/if}}
+
+{{#if (eq emailService "nodemailer")}}
+const transporter = nodemailer.createTransporter({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+{{/if}}
+
+{{#if features.otp}}
+export const sendVerificationEmail = async (email, token) => {
+  try {
+    const subject = "Verify your email address";
+    const html = `
+      <h2>Welcome to {{projectName}}!</h2>
+      <p>Thank you for registering. Please verify your email address to complete your registration.</p>
+      <p>Your verification code is: <strong>${token}</strong></p>
+      <p>This code will expire in 10 minutes.</p>
+      <p>If you didn't request this verification, please ignore this email.</p>
+    `;
+
+    await sendEmail({ to: email, subject, html });
+
+    {{#if features.logging}}
+    logger.info(`Verification email sent to ${email}`);
+    {{/if}}
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Failed to send verification email:", error);
+    {{/if}}
+    throw error;
+  }
+};
+
+export const sendOTPEmail = async (email, otp) => {
+  try {
+    const subject = "Your verification code";
+    const html = `
+      <h2>Your verification code</h2>
+      <p>Your verification code is: <strong>${otp}</strong></p>
+      <p>This code will expire in 10 minutes.</p>
+      <p>If you didn't request this code, please ignore this email.</p>
+    `;
+
+    await sendEmail({ to: email, subject, html });
+
+    {{#if features.logging}}
+    logger.info(`OTP email sent to ${email}`);
+    {{/if}}
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Failed to send OTP email:", error);
+    {{/if}}
+    throw error;
+  }
+};
+{{/if}}
+
+{{#if features.passwordReset}}
+export const sendPasswordResetEmail = async (email, token) => {
+  try {
+    const subject = "Reset your password";
+    const html = `
+      <h2>Password Reset Request</h2>
+      <p>You requested to reset your password. Use the code below to reset your password:</p>
+      <p>Your reset code is: <strong>${token}</strong></p>
+      <p>This code will expire in 10 minutes.</p>
+      <p>If you didn't request this password reset, please ignore this email.</p>
+    `;
+
+    await sendEmail({ to: email, subject, html });
+
+    {{#if features.logging}}
+    logger.info(`Password reset email sent to ${email}`);
+    {{/if}}
+  } catch (error) {
+    {{#if features.logging}}
+    logger.error("Failed to send password reset email:", error);
+    {{/if}}
+    throw error;
+  }
+};
+{{/if}}
+
+const sendEmail = async ({ to, subject, html }) => {
+  {{#if (eq emailService "mailtrap")}}
+  await client.send({
+    from: sender,
+    to: [to],
+    subject,
+    html,
+  });
+  {{/if}}
+
+  {{#if (eq emailService "resend")}}
+  const { data, error } = await resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject,
+    html,
+  });
+
+  if (error) {
+    throw new Error(`Resend error: ${error.message}`);
+  }
+
+  return data;
+  {{/if}}
+
+  {{#if (eq emailService "nodemailer")}}
+  const mailOptions = {
+    from: process.env.FROM_EMAIL,
+    to,
+    subject,
+    html,
+  };
+
+  await transporter.sendMail(mailOptions);
+  {{/if}}
+};
+
+export default sendEmail;
