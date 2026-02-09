@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion';
-import { templates } from '@/data/templates';
-import { TemplateCard } from './TemplateCard';
-import { Template } from '@/types/templates';
+import { motion } from "framer-motion";
+import { templates } from "@/data/templates";
+import { TemplateCard } from "./TemplateCard";
+import { Template } from "@/types/templates";
 
 interface TemplateGalleryProps {
   onSelectTemplate: (template: Template) => void;
@@ -19,14 +19,14 @@ export function TemplateGallery({ onSelectTemplate }: TemplateGalleryProps) {
           className="text-center mb-16"
         >
           <h2 className="text-4xl md:text-5xl font-bold mb-4">
-            Choose Your{' '}
+            Choose Your{" "}
             <span className="bg-gradient-to-r from-primary via-indigo-400 to-primary bg-clip-text text-transparent">
               Starting Point
             </span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Pre-configured templates for common backend architectures. 
-            Customize during setup or start from scratch.
+            Pre-configured templates for common backend architectures. Customize
+            during setup or start from scratch.
           </p>
         </motion.div>
 
@@ -39,10 +39,7 @@ export function TemplateGallery({ onSelectTemplate }: TemplateGalleryProps) {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: idx * 0.1 }}
             >
-              <TemplateCard
-                template={template}
-                onSelect={onSelectTemplate}
-              />
+              <TemplateCard template={template} onSelect={onSelectTemplate} />
             </motion.div>
           ))}
         </div>

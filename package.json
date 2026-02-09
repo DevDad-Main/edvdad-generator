@@ -67,6 +67,7 @@
     "commander": "^12.1.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
+    "file-saver": "^2.0.5",
     "framer-motion": "^11.18.0",
     "fs-extra": "^11.2.0",
     "handlebars": "^4.7.8",

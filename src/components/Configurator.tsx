@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { TemplateConfig, BackendStack, AuthType, DatabaseType, FrontendFramework } from '@/types/templates';
-import { ArrowRight, ArrowLeft, Check, Download, Code2 } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Download, Code2, AlertCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
 
 interface ConfiguratorProps {
   onBack: () => void;
@@ -47,6 +48,18 @@ export function Configurator({ onBack, initialStack }: ConfiguratorProps) {
   const progress = (currentStep / steps.length) * 100;
 
   const handleNext = () => {
+    // Validate project name on first step
+    if (currentStep === 1) {
+      if (!config.projectName.trim()) {
+        toast.error('Project name is required');
+        return;
+      }
+      if (!/^[a-zA-Z][a-zA-Z0-9-_]*$/.test(config.projectName.trim())) {
+        toast.error('Project name must start with a letter and contain only letters, numbers, hyphens, and underscores');
+        return;
+      }
+    }
+    
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1);
     }
@@ -61,36 +74,27 @@ export function Configurator({ onBack, initialStack }: ConfiguratorProps) {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      // Import the web generator
-      const { generateWebBackend } = await import('@/lib/web-generator.js');
+      // Import the template generator
+      const { generateTemplate } = await import('@/lib/template-generator.js');
       
-      // Generate all backend files
-      const files = generateWebBackend(config);
+      // Convert config to expected format
+      const templateConfig = {
+        backend: config.stack,
+        frontend: config.frontend.framework,
+        database: config.database.type,
+        auth: config.auth.type,
+        features: config.features,
+        projectName: config.projectName,
+        packageManager: 'npm',
+        orm: config.database.type === 'mongodb' ? 'mongoose' : 'prisma',
+        styling: 'tailwindcss'
+      };
       
-      console.log('Generated files:', Object.keys(files));
-      console.log('Files object:', files);
+      console.log('Generating template with config:', templateConfig);
       
-      // Create a zip file in memory
-      const { default: JSZip } = await import('jszip');
-      const zip = new JSZip();
+      // Generate template using the working generator
+      await generateTemplate(templateConfig);
       
-      // Add all files to zip
-      Object.entries(files).forEach(([path, content]) => {
-        console.log(`Adding file: ${path}, content type: ${typeof content}, length: ${typeof content === 'string' ? content.length : 'EMPTY'}`);
-        if (typeof content === 'string' && content.length > 0) {
-          zip.file(path, content);
-        } else {
-          console.warn(`Skipping empty file: ${path}`);
-        }
-      });
-      
-      // Generate zip blob
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      
-      console.log('Generated zip blob, size:', (zipBlob as Blob).size);
-      
-      // Store for download
-      setGeneratedZip(zipBlob);
       setGenerated(true);
       
     } catch (error) {
@@ -101,18 +105,7 @@ export function Configurator({ onBack, initialStack }: ConfiguratorProps) {
     }
   };
 
-  const [generatedZip, setGeneratedZip] = useState<Blob | null>(null);
-
-  const handleDownload = () => {
-    if (generatedZip) {
-      const url = URL.createObjectURL(generatedZip);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${config.projectName}-backend.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  };
+  
 
   return (
     <div className="min-h-screen py-12 px-4">
@@ -212,11 +205,13 @@ export function Configurator({ onBack, initialStack }: ConfiguratorProps) {
                     Your backend template is ready to download
                   </p>
                 </div>
-                <div className="flex items-center justify-center gap-4">
-                  <Button onClick={handleDownload} className="bg-primary hover:bg-primary/90">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download ZIP
-                  </Button>
+                <div className="text-center space-y-4">
+                  <div>
+                    <h3 className="text-xl font-semibold mb-2">Template Downloaded!</h3>
+                    <p className="text-muted-foreground">
+                      Your backend template has been downloaded automatically.
+                    </p>
+                  </div>
                   <Button variant="outline" onClick={onBack} className="glass-panel">
                     Create Another
                   </Button>
@@ -232,12 +227,12 @@ export function Configurator({ onBack, initialStack }: ConfiguratorProps) {
 
 // Step Components
 function StackSelection({ config, setConfig }: { config: TemplateConfig; setConfig: (c: TemplateConfig) => void }) {
-  const stacks: { value: BackendStack; label: string; desc: string }[] = [
+  const stacks: { value: BackendStack; label: string; desc: string; isComingSoon?: boolean }[] = [
     { value: 'express', label: 'Express.js', desc: 'Fast, unopinionated, minimalist web framework' },
-    { value: 'fastapi', label: 'FastAPI', desc: 'Modern, fast Python framework with async support' },
-    { value: 'django', label: 'Django', desc: 'High-level Python framework with batteries included' },
-    { value: 'nestjs', label: 'NestJS', desc: 'Progressive Node.js framework with TypeScript' },
-    { value: 'flask', label: 'Flask', desc: 'Lightweight and flexible Python framework' }
+    { value: 'fastapi', label: 'FastAPI', desc: 'Modern, fast Python framework with async support', isComingSoon: true },
+    { value: 'django', label: 'Django', desc: 'High-level Python framework with batteries included', isComingSoon: true },
+    { value: 'nestjs', label: 'NestJS', desc: 'Progressive Node.js framework with TypeScript', isComingSoon: true },
+    { value: 'flask', label: 'Flask', desc: 'Lightweight and flexible Python framework', isComingSoon: true }
   ];
 
   return (
@@ -259,19 +254,27 @@ function StackSelection({ config, setConfig }: { config: TemplateConfig; setConf
           {stacks.map((stack) => (
             <motion.div
               key={stack.value}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: stack.isComingSoon ? 1 : 1.02 }}
+              whileTap={{ scale: stack.isComingSoon ? 1 : 0.98 }}
             >
               <button
-                onClick={() => setConfig({ ...config, stack: stack.value })}
-                className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                  config.stack === stack.value
+                onClick={() => !stack.isComingSoon && setConfig({ ...config, stack: stack.value })}
+                disabled={stack.isComingSoon}
+                className={`w-full p-4 rounded-lg border-2 text-left transition-all relative ${
+                  config.stack === stack.value && !stack.isComingSoon
                     ? 'border-primary bg-primary/10 glow-accent-sm'
+                    : stack.isComingSoon
+                    ? 'border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed'
                     : 'border-border/50 glass-panel hover:border-primary/50'
                 }`}
               >
                 <div className="font-semibold mb-1">{stack.label}</div>
                 <div className="text-sm text-muted-foreground">{stack.desc}</div>
+                {stack.isComingSoon && (
+                  <Badge variant="secondary" className="absolute top-2 right-2 text-xs bg-gray-200 text-gray-600">
+                    In Development
+                  </Badge>
+                )}
               </button>
             </motion.div>
           ))}
