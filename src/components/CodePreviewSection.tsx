@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check } from "lucide-react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 const codeExamples = {
   express: `// server.js
@@ -138,19 +140,35 @@ export function CodePreviewSection() {
                 </div>
 
                 <TabsContent value="express" className="mt-0">
-                  <pre className="p-6 overflow-x-auto">
-                    <code className="text-sm font-mono text-muted-foreground leading-relaxed">
-                      {codeExamples.express}
-                    </code>
-                  </pre>
+                  <SyntaxHighlighter 
+                    language="javascript" 
+                    style={vscDarkPlus}
+                    customStyle={{
+                      margin: 0,
+                      padding: '1.5rem',
+                      background: 'transparent',
+                      fontSize: '0.875rem',
+                      lineHeight: '1.5'
+                    }}
+                  >
+                    {codeExamples.express}
+                  </SyntaxHighlighter>
                 </TabsContent>
 
                 <TabsContent value="docker" className="mt-0">
-                  <pre className="p-6 overflow-x-auto">
-                    <code className="text-sm font-mono text-muted-foreground leading-relaxed">
-                      {codeExamples.docker}
-                    </code>
-                  </pre>
+                  <SyntaxHighlighter 
+                    language="dockerfile" 
+                    style={vscDarkPlus}
+                    customStyle={{
+                      margin: 0,
+                      padding: '1.5rem',
+                      background: 'transparent',
+                      fontSize: '0.875rem',
+                      lineHeight: '1.5'
+                    }}
+                  >
+                    {codeExamples.docker}
+                  </SyntaxHighlighter>
                 </TabsContent>
               </Tabs>
             </Card>
