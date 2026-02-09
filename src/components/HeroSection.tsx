@@ -13,13 +13,7 @@ export function HeroSection({ onGetStarted }: HeroSectionProps) {
   };
 
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center px-4 py-20 overflow-hidden">
-      {/* Background Grid Effect */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)] opacity-20" />
-
-      {/* Glow Effect */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px]" />
-
+    <section className="relative min-h-[90vh] flex items-center justify-center px-4 py-20">
       <div className="relative max-w-7xl mx-auto text-center z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

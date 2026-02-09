@@ -31,9 +31,16 @@ function Home() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-background relative overflow-hidden">
+      {/* Global Background Grid Effect */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20" />
+      
+      {/* Global Glow Effects */}
+      <div className="fixed top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px]" />
+      <div className="fixed top-3/4 left-1/3 -translate-x-1/2 w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[100px]" />
+      
       <Navbar onGetStarted={handleGetStarted} />
-      <div className="pt-20">
+      <div className="pt-20 relative z-10">
         {view === 'home' ? (
           <>
             <HeroSection onGetStarted={handleGetStarted} />
